@@ -273,20 +273,6 @@ export default function MetahumanPage() {
         </button>
       </div>
 
-      <button
-        onClick={() => setIsPlaying((p) => !p)}
-        style={{
-          position: 'absolute',
-          top: 20,
-          left: 20,
-          zIndex: 10,
-          padding: '8px 16px',
-          fontSize: '16px',
-        }}
-        disabled={!animationData} // Disable until data is loaded
-      >
-        {isPlaying ? 'Pause Animation' : 'Play Animation'}
-      </button>
 
       <div style={{ height: '100vh', width: '100vw' }}>
         <Canvas camera={{ position: [0, 0.2, 1.8], fov: 35 }}>
