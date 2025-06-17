@@ -195,7 +195,7 @@ export default function MetahumanPage() {
       formData.append('config_file', configFile);
 
       // 3. Call the API
-      const response = await fetch('https://a2f3d.cxhope.ai/inference-from-prompt', {
+      const response = await fetch('https://a2f3d.cxhope.ai/api/inference-from-prompt', {
         method: 'POST',
         body: formData,
       });
