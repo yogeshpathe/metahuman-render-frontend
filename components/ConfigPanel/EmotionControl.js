@@ -13,12 +13,12 @@ const EmotionControl = ({ emotion, onEmotionChange, isApiDriven }) => {
 
 
   return (
-    <div className="p-4 border rounded-lg shadow-sm bg-white">
-      <h3 className="text-lg font-semibold mb-4">Emotion Control</h3>
+    <div className="p-4 border rounded-lg shadow-sm bg-gray-800">
+      <h3 className="text-lg font-semibold mb-4 text-gray-300">Emotion Control</h3>
       <div className="space-y-4">
         {relevantEmotions.map(([key, value]) => (
           <div key={key} className="flex items-center">
-            <label htmlFor={key} className="w-1/3 text-sm font-medium text-gray-700 capitalize">
+            <label htmlFor={key} className="w-1/3 text-sm font-medium text-gray-300 capitalize">
               {key.replace(/([A-Z]|_)/g, (match) => match === '_' ? ' ' : ` ${match}`).trim()}:
             </label>
             <input
@@ -29,10 +29,10 @@ const EmotionControl = ({ emotion, onEmotionChange, isApiDriven }) => {
               step="0.01"
               value={typeof value === 'number' ? value : 0} // Ensure value is a number
               onChange={(e) => onEmotionChange(key, parseFloat(e.target.value))}
-              className="w-2/3 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              className="w-2/3 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
               disabled={isApiDriven && !['happiness', 'anger', 'sadness', 'surprise', 'disgust', 'fear', 'neutral'].includes(key)} // Disable if API driven and not a standard manually adjustable one
             />
-            <span className="ml-3 text-sm text-gray-600">{(typeof value === 'number' ? value : 0).toFixed(2)}</span>
+            <span className="ml-3 text-sm text-gray-300">{(typeof value === 'number' ? value : 0).toFixed(2)}</span>
           </div>
         ))}
       </div>

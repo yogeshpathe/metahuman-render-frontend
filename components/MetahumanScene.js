@@ -7,14 +7,56 @@ import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
 const hdrPath = '/textures/royal_esplanade_1k.hdr';
 
 function MetahumanScene({ isPlaying, animationData, audioBuffer, emotions, setIsPlaying }) {
-  const gltf = useGLTF('/output/mark_with_tongue.glb');
+  const gltf = useGLTF('/output/human_character.glb');
   const [frames, setFrames] = useState([]);
   const [emotionFrames, setEmotionFrames] = useState([]); // Add state for emotion frames
   const [blendShapeNames, setBlendShapeNames] = useState([]);
   const soundRef = useRef(null);
   const listenerRef = useRef(null);
   const startTimeRef = useRef(null);
-  const { scene } = useThree();
+  const { scene, clock } = useThree(); // Added clock here
+
+  // Log all available blend shape names from the model once
+  useEffect(() => {
+    if (gltf && gltf.scene) {
+      let logged = false;
+      gltf.scene.traverse((object) => {
+        if (!logged && object.isSkinnedMesh && object.morphTargetDictionary) {
+          console.log('Available Blend Shape Names in Model:', Object.keys(object.morphTargetDictionary));
+          logged = true; // Log only for the first skinned mesh with morph targets
+        }
+      });
+    }
+  }, [gltf]);
+
+  // Refs for blink state
+  const nextBlinkTimeRef = useRef(0);
+  const isCurrentlyBlinkingRef = useRef(false);
+  const blinkEndTimeRef = useRef(0);
+
+  // Refs for eye saccades
+  const nextSaccadeTimeRef = useRef(0);
+  const currentEyeTargetXRef = useRef(0);
+  const currentEyeTargetYRef = useRef(0);
+  const saccadeStartTimeRef = useRef(0);
+  const previousEyeTargetXRef = useRef(0);
+  const previousEyeTargetYRef = useRef(0);
+  const currentSaccadeDurationRef = useRef(0.1); // For variable saccade duration
+
+  // Blink parameters (can be adjusted)
+  const BLINK_INTERVAL_MIN = 2.0; // seconds between blinks (minimum)
+  const BLINK_INTERVAL_MAX = 7.0; // seconds between blinks (maximum)
+  const BLINK_DURATION = 0.15;    // seconds for how long a blink lasts
+  const BLINK_STRENGTH = 1.0;     // Blink intensity (0 to 1)
+
+  // Eye Saccade Parameters
+  const SACCADE_INTERVAL_MIN = 0.8; // Min time between saccades (slightly increased)
+  const SACCADE_INTERVAL_MAX = 5.0; // Max time between saccades (slightly increased)
+  const SACCADE_DURATION_MIN = 0.08; // Min duration for a saccade
+  const SACCADE_DURATION_MAX = 0.2;  // Max duration for a saccade
+  const EYE_MOVEMENT_RANGE_X = 0.7; // Max horizontal movement (slightly reduced for subtlety)
+  const EYE_MOVEMENT_RANGE_Y = 0.5; // Max vertical movement (slightly reduced for subtlety)
+  const EYE_TARGET_CENTER_BIAS = 0.4; // (0-1) Higher = more bias to center. 0 = uniform.
 
   // Load HDR environment
   useEffect(() => {
@@ -116,8 +158,124 @@ function MetahumanScene({ isPlaying, animationData, audioBuffer, emotions, setIs
     }
   }, [isPlaying, audioBuffer]);
 
+  // Initialize nextBlinkTime on mount for eye blinking
+  useEffect(() => {
+    const now = clock.getElapsedTime();
+    nextBlinkTimeRef.current = now + BLINK_INTERVAL_MIN + Math.random() * (BLINK_INTERVAL_MAX - BLINK_INTERVAL_MIN);
+    
+    // Initialize Saccade timers and states
+    saccadeStartTimeRef.current = now; 
+    previousEyeTargetXRef.current = 0; 
+    previousEyeTargetYRef.current = 0;
+    currentEyeTargetXRef.current = 0; 
+    currentEyeTargetYRef.current = 0;
+    nextSaccadeTimeRef.current = now + SACCADE_INTERVAL_MIN + Math.random() * (SACCADE_INTERVAL_MAX - SACCADE_INTERVAL_MIN);
+  }, [clock]); // Add clock to dependency array
+
   useFrame(() => {
-    if (!frames.length || !isPlaying || !soundRef.current || !soundRef.current.isPlaying) return;
+    const currentTime = clock.getElapsedTime();
+    let autonomousBlinkValue = 0;
+    let eyeInfluenceX = 0;
+    let eyeInfluenceY = 0; // Re-enabled for vertical movement
+
+    // --- Autonomous Eye Saccades ---
+    if (currentTime >= nextSaccadeTimeRef.current) {
+      previousEyeTargetXRef.current = currentEyeTargetXRef.current;
+      previousEyeTargetYRef.current = currentEyeTargetYRef.current; // Re-enabled
+
+      // Generate target with center bias
+      let targetX = (Math.random() * 2 - 1); // -1 to 1
+      let targetY = (Math.random() * 2 - 1); // -1 to 1
+      // Apply center bias: (random_value * (1 - bias)) + (0 * bias) effectively scales down
+      targetX *= (1 - EYE_TARGET_CENTER_BIAS);
+      targetY *= (1 - EYE_TARGET_CENTER_BIAS);
+
+      currentEyeTargetXRef.current = targetX * EYE_MOVEMENT_RANGE_X;
+      currentEyeTargetYRef.current = targetY * EYE_MOVEMENT_RANGE_Y; // Re-enabled
+      
+      currentSaccadeDurationRef.current = SACCADE_DURATION_MIN + Math.random() * (SACCADE_DURATION_MAX - SACCADE_DURATION_MIN);
+      saccadeStartTimeRef.current = currentTime;
+      nextSaccadeTimeRef.current = currentTime + currentSaccadeDurationRef.current + SACCADE_INTERVAL_MIN + Math.random() * (SACCADE_INTERVAL_MAX - SACCADE_INTERVAL_MIN);
+    }
+
+    // Interpolate eye movement during saccade
+    const saccadeDuration = currentSaccadeDurationRef.current;
+    if (currentTime < saccadeStartTimeRef.current + saccadeDuration) {
+      let saccadeProgress = (currentTime - saccadeStartTimeRef.current) / saccadeDuration; // 0 to 1
+      // Apply ease-in-out (sine)
+      saccadeProgress = 0.5 * (1 - Math.cos(saccadeProgress * Math.PI));
+      
+      eyeInfluenceX = previousEyeTargetXRef.current + (currentEyeTargetXRef.current - previousEyeTargetXRef.current) * saccadeProgress;
+      eyeInfluenceY = previousEyeTargetYRef.current + (currentEyeTargetYRef.current - previousEyeTargetYRef.current) * saccadeProgress; // Re-enabled
+    } else {
+      // Hold eye position after saccade
+      eyeInfluenceX = currentEyeTargetXRef.current;
+      eyeInfluenceY = currentEyeTargetYRef.current; // Re-enabled
+    }
+
+
+    // --- Autonomous Blinking ---
+    if (isCurrentlyBlinkingRef.current) {
+      if (currentTime < blinkEndTimeRef.current) {
+        const blinkProgress = (currentTime - (blinkEndTimeRef.current - BLINK_DURATION)) / BLINK_DURATION; // 0 to 1
+        autonomousBlinkValue = BLINK_STRENGTH * Math.sin(blinkProgress * Math.PI);
+      } else {
+        // Blink ended
+        isCurrentlyBlinkingRef.current = false;
+        // autonomousBlinkValue remains 0
+        nextBlinkTimeRef.current = currentTime + BLINK_INTERVAL_MIN + Math.random() * (BLINK_INTERVAL_MAX - BLINK_INTERVAL_MIN);
+      }
+    } else if (currentTime >= nextBlinkTimeRef.current) {
+      // Time to blink
+      isCurrentlyBlinkingRef.current = true;
+      blinkEndTimeRef.current = currentTime + BLINK_DURATION;
+      // autonomousBlinkValue will be calculated in the next frame's active blink phase (or remains 0 for this frame if blink just started)
+    }
+    // If not blinking and not time to start, autonomousBlinkValue remains 0.
+
+    // Animation logic (lip-sync and emotions)
+    if (!frames.length || !isPlaying || !soundRef.current || !soundRef.current.isPlaying) {
+      // If not playing, we could still allow blinks if desired by moving blink logic
+      // outside this isPlaying check. For now, blinks only happen during playback.
+      // However, we should ensure eyes are reset if not playing.
+      gltf.scene.traverse((obj) => {
+        if (obj.isSkinnedMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
+            // Apply blinking
+            const eyesClosedIndex = obj.morphTargetDictionary['eyesClosed'];
+            if (eyesClosedIndex !== undefined) {
+                obj.morphTargetInfluences[eyesClosedIndex] = autonomousBlinkValue;
+            }
+
+            // Apply eye saccades (even when paused/not playing audio)
+            const eyesLookUpIndex = obj.morphTargetDictionary['eyesLookUp'];
+            const eyesLookDownIndex = obj.morphTargetDictionary['eyesLookDown'];
+            const eyeLookOutLeftIndex = obj.morphTargetDictionary['eyeLookOutLeft'];
+            const eyeLookInLeftIndex = obj.morphTargetDictionary['eyeLookInLeft'];
+            const eyeLookOutRightIndex = obj.morphTargetDictionary['eyeLookOutRight'];
+            const eyeLookInRightIndex = obj.morphTargetDictionary['eyeLookInRight'];
+
+            // Vertical
+            if (eyesLookUpIndex !== undefined) obj.morphTargetInfluences[eyesLookUpIndex] = Math.max(0, eyeInfluenceY);
+            if (eyesLookDownIndex !== undefined) obj.morphTargetInfluences[eyesLookDownIndex] = Math.max(0, -eyeInfluenceY);
+
+            // Horizontal
+            if (eyeInfluenceX > 0) { // Looking Right
+                if (eyeLookInLeftIndex !== undefined) obj.morphTargetInfluences[eyeLookInLeftIndex] = eyeInfluenceX;
+                if (eyeLookOutRightIndex !== undefined) obj.morphTargetInfluences[eyeLookOutRightIndex] = eyeInfluenceX;
+                // Ensure opposite direction is zeroed out
+                if (eyeLookOutLeftIndex !== undefined) obj.morphTargetInfluences[eyeLookOutLeftIndex] = 0;
+                if (eyeLookInRightIndex !== undefined) obj.morphTargetInfluences[eyeLookInRightIndex] = 0;
+            } else { // Looking Left (or straight if eyeInfluenceX is 0)
+                if (eyeLookOutLeftIndex !== undefined) obj.morphTargetInfluences[eyeLookOutLeftIndex] = -eyeInfluenceX;
+                if (eyeLookInRightIndex !== undefined) obj.morphTargetInfluences[eyeLookInRightIndex] = -eyeInfluenceX;
+                // Ensure opposite direction is zeroed out
+                if (eyeLookInLeftIndex !== undefined) obj.morphTargetInfluences[eyeLookInLeftIndex] = 0;
+                if (eyeLookOutRightIndex !== undefined) obj.morphTargetInfluences[eyeLookOutRightIndex] = 0;
+            }
+        }
+      });
+      return;
+    }
 
     const elapsed = soundRef.current.context.currentTime - (startTimeRef.current ?? 0);
     const fps = 30; // Assuming the animation is baked at 30 FPS
@@ -135,10 +293,10 @@ function MetahumanScene({ isPlaying, animationData, audioBuffer, emotions, setIs
     const emotionWeights = emotionFrames[frameIndex] || {}; // Get emotion weights for the current frame
 
     if (!facialWeights || facialWeights.length === 0) return;
-    
+
     gltf.scene.traverse((obj) => {
       if (obj.isSkinnedMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
-        // Apply facial animation blend shapes
+        // 1. Apply base facial animation (lip-sync)
         blendShapeNames.forEach((name, i) => {
           const morphIndex = obj.morphTargetDictionary[name];
           if (morphIndex !== undefined) {
@@ -146,23 +304,53 @@ function MetahumanScene({ isPlaying, animationData, audioBuffer, emotions, setIs
           }
         });
 
-        // Apply emotion blend shapes
-        // Ensure emotion names from API match the morph target names in the GLTF
-        // (e.g., "amazement" in API should match "amazement" or "emotion_amazement" in GLTF)
+        // 2. Handle 'eyesClosed' by combining main animation and autonomous blink
+        const eyesClosedIndex = obj.morphTargetDictionary['eyesClosed'];
+        if (eyesClosedIndex !== undefined) {
+          const mainAnimEyesClosed = obj.morphTargetInfluences[eyesClosedIndex] || 0; // Value from facialWeights
+          obj.morphTargetInfluences[eyesClosedIndex] = Math.max(mainAnimEyesClosed, autonomousBlinkValue);
+        }
+        
+        // 2.5 Apply Eye Saccades (combined with any animation driven eye movement if necessary)
+        // For now, autonomous saccades will override animation-driven eye looks if they exist on same blendshapes.
+        // A more advanced setup might blend them or prioritize.
+        const eyesLookUpIndex = obj.morphTargetDictionary['eyesLookUp'];
+        const eyesLookDownIndex = obj.morphTargetDictionary['eyesLookDown'];
+        const eyeLookOutLeftIndex = obj.morphTargetDictionary['eyeLookOutLeft'];
+        const eyeLookInLeftIndex = obj.morphTargetDictionary['eyeLookInLeft'];
+        const eyeLookOutRightIndex = obj.morphTargetDictionary['eyeLookOutRight'];
+        const eyeLookInRightIndex = obj.morphTargetDictionary['eyeLookInRight'];
+        
+        // Vertical - Assuming facialWeights don't control these directly for saccades.
+        // If they do, this will override. For simplicity, saccades take precedence.
+        if (eyesLookUpIndex !== undefined) obj.morphTargetInfluences[eyesLookUpIndex] = Math.max(0, eyeInfluenceY);
+        if (eyesLookDownIndex !== undefined) obj.morphTargetInfluences[eyesLookDownIndex] = Math.max(0, -eyeInfluenceY);
+
+        // Horizontal - Assuming facialWeights don't control these directly for saccades.
+        if (eyeInfluenceX > 0) { // Looking Right
+            if (eyeLookInLeftIndex !== undefined) obj.morphTargetInfluences[eyeLookInLeftIndex] = eyeInfluenceX;
+            if (eyeLookOutRightIndex !== undefined) obj.morphTargetInfluences[eyeLookOutRightIndex] = eyeInfluenceX;
+            if (eyeLookOutLeftIndex !== undefined) obj.morphTargetInfluences[eyeLookOutLeftIndex] = 0;
+            if (eyeLookInRightIndex !== undefined) obj.morphTargetInfluences[eyeLookInRightIndex] = 0;
+        } else { // Looking Left
+            if (eyeLookOutLeftIndex !== undefined) obj.morphTargetInfluences[eyeLookOutLeftIndex] = -eyeInfluenceX;
+            if (eyeLookInRightIndex !== undefined) obj.morphTargetInfluences[eyeLookInRightIndex] = -eyeInfluenceX;
+            if (eyeLookInLeftIndex !== undefined) obj.morphTargetInfluences[eyeLookInLeftIndex] = 0;
+            if (eyeLookOutRightIndex !== undefined) obj.morphTargetInfluences[eyeLookOutRightIndex] = 0;
+        }
+
+        // 3. Apply emotions additively
         Object.keys(emotionWeights).forEach(emotionName => {
-          // Attempt to find a direct match or a prefixed match (e.g., emotion_joy)
-          let morphTargetName = emotionName; 
+          let morphTargetName = emotionName;
           if (obj.morphTargetDictionary[morphTargetName] === undefined && obj.morphTargetDictionary[`emotion_${emotionName}`] !== undefined) {
             morphTargetName = `emotion_${emotionName}`;
           }
-          // You might need to add more normalization logic here if names differ significantly
 
           const morphIndex = obj.morphTargetDictionary[morphTargetName];
           if (morphIndex !== undefined) {
-            // Add or blend emotion influence. Here, we're adding.
-            // You might want to average or use a more complex blending strategy.
+            // Add emotion influence to the current value (which includes facial anim and blink for eyesClosed)
             obj.morphTargetInfluences[morphIndex] = (obj.morphTargetInfluences[morphIndex] || 0) + (emotionWeights[emotionName] ?? 0);
-            // Clamp influence between 0 and 1 if necessary
+            // Clamp final influence
             obj.morphTargetInfluences[morphIndex] = Math.max(0, Math.min(1, obj.morphTargetInfluences[morphIndex]));
           }
         });

@@ -147,8 +147,8 @@ const ConfigPanel = ({ emotions }) => { // Accept emotions as a prop
   }, [emotions]);
 
   return (
-    <div className="p-6 bg-gray-100 min-h-screen">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">3D Model Configuration</h2>
+    <div className="p-6 bg-gray-800 rounded-lg shadow-lg max-h-screen overflow-y-auto">
+      <h2 className="text-2xl font-bold mb-6 text-gray-300">3D Model Configuration</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Pass the API-driven emotion data to EmotionControl */}
         <EmotionControl emotion={config.emotion} onEmotionChange={handleEmotionChange} isApiDriven={!!emotions} />
