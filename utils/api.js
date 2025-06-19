@@ -31,16 +31,16 @@ export const generateAnimationFromPrompt = async (prompt, setIsLoading) => {
       // 4. Decode base64 audio and create an AudioBuffer
       const audioBuffer = await decodeBase64Audio(data.output_audio_wav_base64);
 
-      // 5. Return animation frames and audio buffer
-      return { animationData: data.animation_frames, audioBuffer };
+      // 5. Return animation frames, audio buffer, and emotions
+      return { animationData: data.animation_frames, audioBuffer, emotions: data.emotions.a2f_smoothed_output };
     } else {
       console.error('API returned an error:', data.status.message);
-      return { animationData: null, audioBuffer: null };
+      return { animationData: null, audioBuffer: null, emotions: null };
     }
 
   } catch (error) {
     console.error('Failed to generate animation:', error);
-    return { animationData: null, audioBuffer: null };
+    return { animationData: null, audioBuffer: null, emotions: null };
   } finally {
     setIsLoading(false);
   }

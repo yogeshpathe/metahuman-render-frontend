@@ -6,9 +6,10 @@ import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
 
 const hdrPath = '/textures/royal_esplanade_1k.hdr';
 
-function MetahumanScene({ isPlaying, animationData, audioBuffer, setIsPlaying }) {
+function MetahumanScene({ isPlaying, animationData, audioBuffer, emotions, setIsPlaying }) {
   const gltf = useGLTF('/output/mark_with_tongue.glb');
   const [frames, setFrames] = useState([]);
+  const [emotionFrames, setEmotionFrames] = useState([]); // Add state for emotion frames
   const [blendShapeNames, setBlendShapeNames] = useState([]);
   const soundRef = useRef(null);
   const listenerRef = useRef(null);
@@ -46,6 +47,14 @@ function MetahumanScene({ isPlaying, animationData, audioBuffer, setIsPlaying })
       console.log('Loaded frames from API:', frameData.length, 'blend shapes:', normalizedNames.length);
     }
   }, [animationData]);
+
+  // Process emotion data
+  useEffect(() => {
+    if (emotions && emotions.length > 0) {
+      setEmotionFrames(emotions.map(frame => frame.emotion_values));
+      console.log('Loaded emotion frames:', emotions.length);
+    }
+  }, [emotions]);
 
   // Setup audio listener and audio buffer
   useEffect(() => {
@@ -122,16 +131,39 @@ function MetahumanScene({ isPlaying, animationData, audioBuffer, setIsPlaying })
       return;
     }
 
-    const weights = frames[frameIndex];
-    if (!weights || weights.length === 0) return;
+    const facialWeights = frames[frameIndex];
+    const emotionWeights = emotionFrames[frameIndex] || {}; // Get emotion weights for the current frame
+
+    if (!facialWeights || facialWeights.length === 0) return;
     
     gltf.scene.traverse((obj) => {
       if (obj.isSkinnedMesh && obj.morphTargetDictionary && obj.morphTargetInfluences) {
-        // The `blendShapeNames` are now correctly in camelCase
+        // Apply facial animation blend shapes
         blendShapeNames.forEach((name, i) => {
           const morphIndex = obj.morphTargetDictionary[name];
           if (morphIndex !== undefined) {
-            obj.morphTargetInfluences[morphIndex] = weights[i] ?? 0;
+            obj.morphTargetInfluences[morphIndex] = facialWeights[i] ?? 0;
+          }
+        });
+
+        // Apply emotion blend shapes
+        // Ensure emotion names from API match the morph target names in the GLTF
+        // (e.g., "amazement" in API should match "amazement" or "emotion_amazement" in GLTF)
+        Object.keys(emotionWeights).forEach(emotionName => {
+          // Attempt to find a direct match or a prefixed match (e.g., emotion_joy)
+          let morphTargetName = emotionName; 
+          if (obj.morphTargetDictionary[morphTargetName] === undefined && obj.morphTargetDictionary[`emotion_${emotionName}`] !== undefined) {
+            morphTargetName = `emotion_${emotionName}`;
+          }
+          // You might need to add more normalization logic here if names differ significantly
+
+          const morphIndex = obj.morphTargetDictionary[morphTargetName];
+          if (morphIndex !== undefined) {
+            // Add or blend emotion influence. Here, we're adding.
+            // You might want to average or use a more complex blending strategy.
+            obj.morphTargetInfluences[morphIndex] = (obj.morphTargetInfluences[morphIndex] || 0) + (emotionWeights[emotionName] ?? 0);
+            // Clamp influence between 0 and 1 if necessary
+            obj.morphTargetInfluences[morphIndex] = Math.max(0, Math.min(1, obj.morphTargetInfluences[morphIndex]));
           }
         });
       }

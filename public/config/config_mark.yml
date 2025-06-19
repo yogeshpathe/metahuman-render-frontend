@@ -165,8 +165,14 @@ emotion:
   sadness: 0
   surprise: 0
   disgust: 0
-  fear: 0
+  fear: 0.21008725464344025
   neutral: 0.5
+  joy: 0.00014397241466213018
+  grief: 0
+  outofbreath: 0
+  pain: 0.21000000834465027
+  amazement: 0.21000000834465027
+  cheekiness: 0
 audio2face:
   jawOpen: 0.5
   mouthShape: 0.5

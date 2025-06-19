@@ -3,7 +3,7 @@ import EmotionControl from './EmotionControl';
 import Audio2FaceTuning from './Audio2FaceTuning';
 import BlendshapeControl from './BlendshapeControl';
 
-const ConfigPanel = () => {
+const ConfigPanel = ({ emotions }) => { // Accept emotions as a prop
   const [config, setConfig] = useState({
     emotion: {
       happiness: 0.5,
@@ -129,11 +129,29 @@ const ConfigPanel = () => {
     }
   };
 
+  // Effect to update emotion controls when new emotions data is received
+  useEffect(() => {
+    if (emotions && emotions.length > 0) {
+      // Assuming the last frame of emotions is representative or you want to display live updates
+      // For simplicity, let's take the first frame's emotion values if available,
+      // or you might want to average them or display them dynamically.
+      const currentEmotions = emotions[0]?.emotion_values || {};
+      setConfig(prevConfig => ({
+        ...prevConfig,
+        emotion: {
+          ...prevConfig.emotion, // Keep existing manual settings
+          ...currentEmotions // Override/update with API data
+        }
+      }));
+    }
+  }, [emotions]);
+
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
       <h2 className="text-2xl font-bold mb-6 text-gray-800">3D Model Configuration</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <EmotionControl emotion={config.emotion} onEmotionChange={handleEmotionChange} />
+        {/* Pass the API-driven emotion data to EmotionControl */}
+        <EmotionControl emotion={config.emotion} onEmotionChange={handleEmotionChange} isApiDriven={!!emotions} />
         <Audio2FaceTuning
           audio2faceParams={config.audio2face}
           onAudio2FaceParamChange={handleAudio2FaceParamChange}

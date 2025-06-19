@@ -14,19 +14,22 @@ export default function MetahumanPage() {
   const [prompt, setPrompt] = useState('');
   const [animationData, setAnimationData] = useState(null);
   const [audioBuffer, setAudioBuffer] = useState(null);
+  const [emotions, setEmotions] = useState(null); // Add state for emotions
   const [isLoading, setIsLoading] = useState(false);
 
   const handleGenerateAnimation = async () => {
     if (!prompt) return;
 
-    const { animationData, audioBuffer } = await generateAnimationFromPrompt(prompt, setIsLoading);
+    const { animationData, audioBuffer, emotions } = await generateAnimationFromPrompt(prompt, setIsLoading);
     
     if (animationData && audioBuffer) {
       setAnimationData(animationData);
       setAudioBuffer(audioBuffer);
+      setEmotions(emotions); // Set emotions
       setIsPlaying(true);
     } else {
       setIsPlaying(false);
+      setEmotions(null); // Reset emotions on failure
     }
   };
 
@@ -57,7 +60,7 @@ export default function MetahumanPage() {
           <Suspense fallback={<Loader />}>
             <ambientLight intensity={0.5} />
             <pointLight position={[5, 5, 5]} intensity={0.8} />
-            <MetahumanScene isPlaying={isPlaying} animationData={animationData} audioBuffer={audioBuffer} setIsPlaying={setIsPlaying} />
+            <MetahumanScene isPlaying={isPlaying} animationData={animationData} audioBuffer={audioBuffer} emotions={emotions} setIsPlaying={setIsPlaying} />
             <SceneControls />
           </Suspense>
         </Canvas>
@@ -65,7 +68,7 @@ export default function MetahumanPage() {
 
       {/* Config Panel */}
       <div className="h-full w-1/2 bg-white shadow-lg overflow-y-auto">
-        <ConfigPanel />
+        <ConfigPanel emotions={emotions} />
       </div>
     </div>
   );
