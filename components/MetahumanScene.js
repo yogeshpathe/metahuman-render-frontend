@@ -175,23 +175,25 @@ function MetahumanScene({ isPlaying, animationData, audioBuffer, emotions, setIs
   useFrame(() => {
     const currentTime = clock.getElapsedTime();
     let autonomousBlinkValue = 0;
-    let eyeInfluenceX = 0;
-    let eyeInfluenceY = 0; // Re-enabled for vertical movement
+    // Variables for calculated saccade values
+    let calculatedEyeInfluenceX = 0;
+    let calculatedEyeInfluenceY = 0;
 
-    // --- Autonomous Eye Saccades ---
+    // --- Autonomous Eye Saccades Calculation ---
+    // This section calculates the potential eye movement if saccades were to occur.
     if (currentTime >= nextSaccadeTimeRef.current) {
       previousEyeTargetXRef.current = currentEyeTargetXRef.current;
-      previousEyeTargetYRef.current = currentEyeTargetYRef.current; // Re-enabled
+      previousEyeTargetYRef.current = currentEyeTargetYRef.current;
 
       // Generate target with center bias
       let targetX = (Math.random() * 2 - 1); // -1 to 1
       let targetY = (Math.random() * 2 - 1); // -1 to 1
-      // Apply center bias: (random_value * (1 - bias)) + (0 * bias) effectively scales down
+      // Apply center bias
       targetX *= (1 - EYE_TARGET_CENTER_BIAS);
       targetY *= (1 - EYE_TARGET_CENTER_BIAS);
 
       currentEyeTargetXRef.current = targetX * EYE_MOVEMENT_RANGE_X;
-      currentEyeTargetYRef.current = targetY * EYE_MOVEMENT_RANGE_Y; // Re-enabled
+      currentEyeTargetYRef.current = targetY * EYE_MOVEMENT_RANGE_Y;
       
       currentSaccadeDurationRef.current = SACCADE_DURATION_MIN + Math.random() * (SACCADE_DURATION_MAX - SACCADE_DURATION_MIN);
       saccadeStartTimeRef.current = currentTime;
@@ -205,13 +207,18 @@ function MetahumanScene({ isPlaying, animationData, audioBuffer, emotions, setIs
       // Apply ease-in-out (sine)
       saccadeProgress = 0.5 * (1 - Math.cos(saccadeProgress * Math.PI));
       
-      eyeInfluenceX = previousEyeTargetXRef.current + (currentEyeTargetXRef.current - previousEyeTargetXRef.current) * saccadeProgress;
-      eyeInfluenceY = previousEyeTargetYRef.current + (currentEyeTargetYRef.current - previousEyeTargetYRef.current) * saccadeProgress; // Re-enabled
+      calculatedEyeInfluenceX = previousEyeTargetXRef.current + (currentEyeTargetXRef.current - previousEyeTargetXRef.current) * saccadeProgress;
+      calculatedEyeInfluenceY = previousEyeTargetYRef.current + (currentEyeTargetYRef.current - previousEyeTargetYRef.current) * saccadeProgress;
     } else {
       // Hold eye position after saccade
-      eyeInfluenceX = currentEyeTargetXRef.current;
-      eyeInfluenceY = currentEyeTargetYRef.current; // Re-enabled
+      calculatedEyeInfluenceX = currentEyeTargetXRef.current;
+      calculatedEyeInfluenceY = currentEyeTargetYRef.current;
     }
+
+    // Determine final eye influence based on speaking state
+    const isCurrentlySpeaking = isPlaying && soundRef.current && soundRef.current.isPlaying;
+    const eyeInfluenceX = isCurrentlySpeaking ? 0 : calculatedEyeInfluenceX;
+    const eyeInfluenceY = isCurrentlySpeaking ? 0 : calculatedEyeInfluenceY;
 
 
     // --- Autonomous Blinking ---
