@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useMemo, useCallback } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
+import * as THREE from 'three';
 import { useAnimationData } from './hooks/useAnimationData';
 import { useAudioPlayback } from './hooks/useAudioPlayback';
 import { useEyeBlinking } from './hooks/useEyeBlinking';
@@ -11,10 +12,16 @@ import { useEyeSaccades } from './hooks/useEyeSaccades';
 function MetahumanModel({ isPlaying, animationData, audioBuffer, emotions, setIsPlaying, modelUrl }) {
   const gltf = useGLTF(modelUrl);
   const { frames, emotionFrames, blendShapeNames } = useAnimationData(animationData, emotions);
-  const { soundRef, startTimeRef } = useAudioPlayback(gltf.scene, audioBuffer, isPlaying, () => setIsPlaying(false));
+
+  const handlePlaybackEnd = useCallback(() => {
+    setIsPlaying(false);
+  }, [setIsPlaying]); // setIsPlaying from useState is stable
+
+  const { soundRef, startTimeRef } = useAudioPlayback(gltf.scene, audioBuffer, isPlaying, handlePlaybackEnd);
   const { clock } = useThree();
   const { getBlinkValue } = useEyeBlinking(clock);
-  
+  const mixerRef = useRef();
+
   // The isSpeaking state for useEyeSaccades will be determined within useFrame
   // and passed to getSaccadeValues if the hook is designed for it,
   // or the hook itself will be reactive to the isPlaying prop.
@@ -29,13 +36,34 @@ function MetahumanModel({ isPlaying, animationData, audioBuffer, emotions, setIs
       gltf.scene.traverse((object) => {
         if (!logged && object.isSkinnedMesh && object.morphTargetDictionary) {
           console.log('Available Blend Shape Names in Model:', Object.keys(object.morphTargetDictionary));
-          logged = true; 
+          logged = true;
         }
       });
     }
+
+    // Setup for embedded GLB animations
+    if (gltf && gltf.animations && gltf.animations.length > 0) {
+      mixerRef.current = new THREE.AnimationMixer(gltf.scene);
+      const action = mixerRef.current.clipAction(gltf.animations[0]); // Play the first animation
+      action.setLoop(THREE.LoopRepeat);
+      action.play();
+    }
+    
+    return () => {
+      // Cleanup mixer on component unmount or when gltf changes
+      if (mixerRef.current) {
+        mixerRef.current.stopAllAction();
+        // mixerRef.current = null; // Consider if full disposal is needed
+      }
+    };
   }, [gltf]);
 
-  useFrame(() => {
+  useFrame((state, delta) => {
+    // Update the animation mixer for GLB animations
+    if (mixerRef.current) {
+      mixerRef.current.update(delta);
+    }
+
     const currentTime = clock.getElapsedTime();
     const autonomousBlinkValue = getBlinkValue(currentTime);
     
